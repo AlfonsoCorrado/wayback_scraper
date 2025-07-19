@@ -88,7 +88,7 @@ cp deploy/README.md ${ARTIFACT_FOLDER}/
 # Update artifact docker-compose.yml with correct image name and version
 echo -e "${GREEN}📝 Updating artifact with correct image name...${NC}"
 # Replace the image name with the correct Docker Hub username and version
-sed -i.bak "s|wayback-scraper|${DOCKERHUB_USERNAME}/wayback-scraper:${VERSION}|g" ${ARTIFACT_FOLDER}/docker-compose.yml
+sed -i.bak "s|image: wayback-scraper|image: ${DOCKERHUB_USERNAME}/wayback-scraper:${VERSION}|g" ${ARTIFACT_FOLDER}/docker-compose.yml
 rm -f ${ARTIFACT_FOLDER}/docker-compose.yml.bak
 echo -e "${GREEN}✅ Updated artifact docker-compose.yml${NC}"
 

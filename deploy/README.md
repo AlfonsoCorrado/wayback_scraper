@@ -5,7 +5,7 @@ A simple tool to download historical website snapshots from the Internet Archive
 ## Prerequisites
 
 - Docker and Docker Compose installed
-- GitHub Container Registry access (the image should be publicly available)
+- Docker Hub access (the image should be publicly available)
 
 ## Quick Setup
 
@@ -47,7 +47,7 @@ wayback_scraper/
 
 - **Docker not running**: Start Docker Desktop or Docker daemon
 - **Permission denied**: Run `chmod +x run.sh` to make the script executable
-- **Image not found**: Ensure the Docker image is available in GitHub Container Registry
+- **Image not found**: Ensure the Docker image is available in Docker Hub
 
 ## Support
 
