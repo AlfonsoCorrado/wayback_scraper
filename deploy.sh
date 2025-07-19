@@ -44,6 +44,12 @@ if [ ! -d ".git" ]; then
     exit 1
 fi
 
+# Update submodules
+echo -e "${GREEN}🔄 Updating submodules...${NC}"
+git submodule update --init --recursive
+git submodule update --remote --merge
+echo -e "${GREEN}✅ Submodules updated successfully${NC}"
+
 # Check if user is logged in to Docker Hub
 echo -e "${YELLOW}📝 Note: Make sure you're logged into Docker Hub with: docker login${NC}"
 

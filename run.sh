@@ -49,7 +49,11 @@ echo ""
 
 # Run the scraper
 echo "🔄 Starting the scraper..."
-docker-compose up --build
+if command -v docker-compose &> /dev/null; then
+    docker-compose up --build
+else
+    docker compose up --build
+fi
 
 echo ""
 echo "✅ Scraping completed!"
