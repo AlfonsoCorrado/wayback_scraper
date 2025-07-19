@@ -1,0 +1,3 @@
+[submodule "wayback-machine-downloader"]
+	path = wayback-machine-downloader
+	url = https://github.com/AlfonsoCorrado/wayback-machine-downloader.git
