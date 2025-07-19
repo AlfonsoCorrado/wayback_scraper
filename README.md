@@ -36,6 +36,44 @@ A powerful tool for downloading historical versions of websites from the Interne
 3. **Check results**:
    Your downloaded websites will be available in the `downloads/` directory.
 
+## Deployment
+
+### Quick Deploy
+
+```bash
+# Deploy with default version (1.0.0)
+chmod +x deploy.sh
+./deploy.sh
+
+# Deploy with specific version
+./deploy.sh 2.1.0
+```
+
+### What it does
+
+1. Builds and pushes Docker image to Docker Hub (latest + version tag)
+2. Creates a `wayback_scraper` artifact with:
+   - `docker-compose.yml` (configured image with version)
+   - `run.sh` (execution script)
+   - `README.md` (quick start)
+3. Publishes GitHub Release with downloadable artifact
+
+### Prerequisites
+
+- Docker and Docker Hub account
+- GitHub CLI (optional, for automated releases)
+- Update `DOCKERHUB_USERNAME` in `deploy.sh`
+
+### Troubleshooting
+
+```bash
+# Login to Docker Hub
+docker login
+
+# Make script executable
+chmod +x deploy.sh
+```
+
 ## CSV Format
 
 Your CSV file must contain these columns:
@@ -45,8 +83,8 @@ Your CSV file must contain these columns:
 Example:
 ```csv
 URL,Deal Date
-https://example.com,2016-09-30 00:00:00
-https://company.com,2017-03-15 00:00:00
+https://example.com,2016-09-30
+https://company.com,2017-03-15
 ```
 
 ## How It Works

@@ -1,0 +1,18 @@
+services:
+  wayback-scraper:
+    image: alfonsocorrado/wayback-scraper:latest
+    container_name: wayback-scraper
+    volumes:
+      # Mount the data.csv file from the host
+      - ./data.csv:/app/data.csv:ro
+      # Mount the downloads folder for persistent storage
+      - ./downloads:/app/downloads
+    working_dir: /app
+    command: ["python3", "wayback_scraper.py", "data.csv", "--output", "downloads"]
+    environment:
+      # Set Python to not buffer output for better logging
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    # Keep container running for debugging if needed
+    tty: true
+    stdin_open: true 
