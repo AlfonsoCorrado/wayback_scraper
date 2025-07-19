@@ -41,7 +41,7 @@ fi
 
 # Pull the latest image
 echo -e "${GREEN}📥 Pulling latest Docker image...${NC}"
-docker-compose pull
+docker compose pull
 
 # Run the scraper
 echo -e "${GREEN}🏃 Starting Wayback Scraper...${NC}"
@@ -51,7 +51,7 @@ echo -e "${YELLOW}📝 Logs will be available in ./downloads/logs/ directory${NC
 echo ""
 
 # Run docker-compose
-docker-compose up --abort-on-container-exit
+docker compose up --abort-on-container-exit
 
 # Check if the container completed successfully
 if [ $? -eq 0 ]; then

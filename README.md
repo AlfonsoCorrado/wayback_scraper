@@ -141,12 +141,12 @@ DEAL_DATE_COLUMN = 'Deal Date'
 
 Build the image:
 ```bash
-docker-compose build
+docker compose build
 ```
 
 Run the scraper:
 ```bash
-docker-compose up
+docker compose up
 ```
 
 ### Direct Python Usage
