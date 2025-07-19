@@ -1,6 +1,6 @@
 services:
   wayback-scraper:
-    image: alfonsocorrado/wayback-scraper:latest
+    image: alfonsocorrado/wayback-scraper
     container_name: wayback-scraper
     volumes:
       # Mount the data.csv file from the host
