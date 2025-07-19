@@ -3,6 +3,9 @@ USER root
 
 WORKDIR /build
 
+# Install SOCKS5 support
+RUN apk add --no-cache socksify
+
 # Copy wayback-machine-downloader files
 COPY wayback-machine-downloader/ /build/
 
@@ -15,8 +18,6 @@ RUN apk add --no-cache python3 py3-pip
 
 # Set up application directory
 WORKDIR /app
-
-
 
 # Copy only the necessary Python files
 COPY requirements.txt .

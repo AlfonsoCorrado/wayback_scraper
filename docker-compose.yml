@@ -16,6 +16,10 @@ services:
     environment:
       # Set Python to not buffer output for better logging
       - PYTHONUNBUFFERED=1
+      # Proxy configuration (optional)
+      - PROXY_URL=${PROXY_URL:-}
+      - PROXY_USER=${PROXY_USER:-}
+      - PROXY_PASS=${PROXY_PASS:-}
     restart: unless-stopped
     # Keep container running for debugging if needed
     tty: true
