@@ -66,11 +66,17 @@ def setup_logging(output_dir):
 
 def create_download_logger(download_folder, url, date):
     """
-    Create a specific logger for each download operation.
+    Create a logger specific to a download operation.
     """
-    log_file = os.path.join(download_folder, 'download.log')
+    # Create download-specific log file
+    log_filename = f"download_{date}.log"
+    log_file = os.path.join(download_folder, log_filename)
     
-    # Create file handler for this specific download
+    # Create logger for this download
+    download_logger = logging.getLogger(f"download_{url}_{date}")
+    download_logger.setLevel(logging.INFO)
+    
+    # Create file handler
     file_handler = logging.FileHandler(log_file, mode='w', encoding='utf-8')
     file_handler.setLevel(logging.INFO)
     
@@ -78,147 +84,170 @@ def create_download_logger(download_folder, url, date):
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     file_handler.setFormatter(formatter)
     
-    # Create logger
-    logger = logging.getLogger(f'download_{url}_{date}')
-    logger.setLevel(logging.INFO)
-    logger.propagate = False  # Prevent propagation to main logger
-    logger.addHandler(file_handler)
+    # Add handler to logger
+    download_logger.addHandler(file_handler)
     
-    return logger, log_file
+    return download_logger, log_file
 
 
 def load_state(state_file_path):
     """
-    Load the state from JSON file.
-    Returns empty dict if file doesn't exist.
+    Load the state from the state file.
     """
     if os.path.exists(state_file_path):
         try:
-            with open(state_file_path, 'r') as f:
-                state = json.load(f)
-                logging.info(f"Loaded state from {state_file_path}")
-                return state
+            with open(state_file_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
         except (json.JSONDecodeError, IOError) as e:
-            logging.warning(f"Warning: Could not load state file {state_file_path}: {e}")
-            logging.info("Starting fresh...")
+            logging.warning(f"Could not load state file {state_file_path}: {e}")
+            return {}
     return {}
 
 
 def save_state(state, state_file_path):
     """
-    Save the state to JSON file.
+    Save the state to the state file.
     """
     try:
-        with open(state_file_path, 'w') as f:
-            json.dump(state, f, indent=2)
-        logging.info(f"State saved to {state_file_path}")
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(state_file_path), exist_ok=True)
+        
+        with open(state_file_path, 'w', encoding='utf-8') as f:
+            json.dump(state, f, indent=2, ensure_ascii=False)
     except IOError as e:
-        logging.warning(f"Warning: Could not save state file {state_file_path}: {e}")
+        logging.error(f"Could not save state file {state_file_path}: {e}")
 
 
 def is_download_completed(state, website_url, date, folder_name):
     """
-    Check if a specific download has been completed.
+    Check if a download has already been completed.
     """
-    url_key = website_url.strip()
-    if url_key not in state:
+    if 'downloads' not in state:
         return False
     
-    downloads = state[url_key].get('downloads', {})
-    download_key = f"{date}_{folder_name}"
-    return downloads.get(download_key, {}).get('completed', False)
+    download_key = f"{website_url}_{date}_{folder_name}"
+    return download_key in state['downloads']
 
 
 def mark_download_completed(state, website_url, date, folder_name, success=True):
     """
     Mark a download as completed in the state.
     """
-    url_key = website_url.strip()
-    if url_key not in state:
-        state[url_key] = {'downloads': {}}
+    if 'downloads' not in state:
+        state['downloads'] = {}
     
-    if 'downloads' not in state[url_key]:
-        state[url_key]['downloads'] = {}
-    
-    download_key = f"{date}_{folder_name}"
-    state[url_key]['downloads'][download_key] = {
-        'completed': success,
-        'timestamp': datetime.now().isoformat(),
+    download_key = f"{website_url}_{date}_{folder_name}"
+    state['downloads'][download_key] = {
+        'completed_at': datetime.now().isoformat(),
+        'success': success,
         'folder': folder_name
     }
 
 
 def get_resume_stats(state, df):
     """
-    Get statistics about what can be resumed.
+    Get statistics about resume progress.
     """
-    total_downloads = len(df) * 2  # Each row has 2 downloads
-    completed_downloads = 0
+    if 'downloads' not in state:
+        return 0, len(df) * 2  # 2 downloads per row
     
-    for _, row in df.iterrows():
+    completed = 0
+    total = len(df) * 2  # 2 downloads per row
+    
+    for row_num, (index, row) in enumerate(df.iterrows(), 1):
         website_url = str(row[WEBSITE_URL_COLUMN]).strip()
         deal_date = str(row[DEAL_DATE_COLUMN]).strip()
         
         first_date, second_date = calculate_download_dates(deal_date)
         if first_date is None or second_date is None:
             continue
-            
-        sanitized_name = sanitize_folder_name(website_url)
-        first_date_folder = f"{sanitized_name}_up_to_{first_date}"
-        second_date_folder = f"{sanitized_name}_up_to_{second_date}"
         
-        if is_download_completed(state, website_url, first_date, first_date_folder):
-            completed_downloads += 1
-        if is_download_completed(state, website_url, second_date, second_date_folder):
-            completed_downloads += 1
+        sanitized_name = sanitize_folder_name(website_url)
+        
+        # Check first date download
+        if is_download_completed(state, website_url, first_date, f"{sanitized_name}_up_to_{first_date}"):
+            completed += 1
+        
+        # Check second date download
+        if is_download_completed(state, website_url, second_date, f"{sanitized_name}_up_to_{second_date}"):
+            completed += 1
     
-    return completed_downloads, total_downloads
+    return completed, total
 
 
 def sanitize_folder_name(url):
     """
-    Sanitize URL to create a valid folder name.
+    Create a safe folder name from a URL.
     """
-    parsed = urlparse(url)
-    domain = parsed.netloc or parsed.path
-    # Remove invalid characters for folder names
-    sanitized = "".join(c for c in domain if c.isalnum() or c in ('-', '_', '.'))
-    return sanitized
+    # Remove protocol
+    if url.startswith(('http://', 'https://')):
+        url = url.split('://', 1)[1]
+    
+    # Remove trailing slash
+    url = url.rstrip('/')
+    
+    # Replace invalid characters
+    invalid_chars = '<>:"|?*'
+    for char in invalid_chars:
+        url = url.replace(char, '_')
+    
+    # Replace dots with underscores (except for file extensions)
+    parts = url.split('.')
+    if len(parts) > 1:
+        # Keep the last part as extension if it looks like one
+        if len(parts[-1]) <= 4 and parts[-1].isalpha():
+            domain = '.'.join(parts[:-1])
+            extension = parts[-1]
+            domain = domain.replace('.', '_')
+            url = f"{domain}.{extension}"
+        else:
+            url = url.replace('.', '_')
+    else:
+        url = url.replace('.', '_')
+    
+    return url
 
 
 def parse_deal_date(deal_date_str):
     """
-    Parse deal date string to datetime object.
-    Handles format like "2016-09-30 00:00:00"
+    Parse deal date string into datetime object.
+    Supports multiple formats.
     """
-    try:
-        # Remove time part if present and parse date
-        date_part = deal_date_str.split()[0]
-        return datetime.strptime(date_part, '%Y-%m-%d')
-    except (ValueError, AttributeError) as e:
-        logging.warning(f"Could not parse deal date '{deal_date_str}': {e}")
-        return None
+    formats = [
+        '%Y-%m-%d',      # 2016-09-30
+        '%d/%m/%Y',      # 30/09/2016
+        '%m/%d/%Y',      # 09/30/2016
+        '%Y/%m/%d',      # 2016/09/30
+        '%d-%m-%Y',      # 30-09-2016
+        '%m-%d-%Y',      # 09-30-2016
+    ]
+    
+    for fmt in formats:
+        try:
+            return datetime.strptime(deal_date_str.strip(), fmt)
+        except ValueError:
+            continue
+    
+    return None
 
 
 def calculate_download_dates(deal_date_str):
     """
-    Calculate first date (6 months before deal) and second date (1 year after deal).
-    Returns tuple of (first_date, second_date) as YYYYMMDD strings.
+    Calculate the two download dates based on the deal date.
     """
     deal_date = parse_deal_date(deal_date_str)
     if deal_date is None:
         return None, None
     
-    # Calculate 6 months before deal date
+    # Calculate dates
     first_date = deal_date - relativedelta(months=MONTHS_BEFORE_DEAL)
-    
-    # Calculate 1 year after deal date
     second_date = deal_date + relativedelta(months=MONTHS_AFTER_DEAL)
     
+    # Format as YYYYMMDD
     return first_date.strftime('%Y%m%d'), second_date.strftime('%Y%m%d')
 
 
-def run_wayback_downloader(url, date, output_folder, state, state_file_path):
+def run_wayback_downloader(url, date, output_folder, state, state_file_path, proxy_config=None):
     """
     Run wayback-machine-downloader with specified parameters.
     """
@@ -248,6 +277,15 @@ def run_wayback_downloader(url, date, output_folder, state, state_file_path):
         "-c", "2",
     ]
     
+    # Add proxy options if provided
+    if proxy_config:
+        if proxy_config.get('url'):
+            cmd.extend(["--proxy", proxy_config['url']])
+        if proxy_config.get('user'):
+            cmd.extend(["--proxy-user", proxy_config['user']])
+        if proxy_config.get('password'):
+            cmd.extend(["--proxy-pass", proxy_config['password']])
+    
     success = False
     start_time = time.time()
     
@@ -257,6 +295,8 @@ def run_wayback_downloader(url, date, output_folder, state, state_file_path):
         download_logger.info(f"Command: {' '.join(cmd)}")
         download_logger.info(f"Output folder: {output_folder}")
         download_logger.info(f"Log file: {log_file}")
+        if proxy_config:
+            download_logger.info(f"Using proxy: {proxy_config.get('url', 'N/A')}")
         download_logger.info("-" * 80)
         
         # Run the command and capture output
@@ -328,7 +368,7 @@ def run_wayback_downloader(url, date, output_folder, state, state_file_path):
     return success
 
 
-def process_csv(csv_file, output_base_dir, state_file_path):
+def process_csv(csv_file, output_base_dir, state_file_path, proxy_config=None):
     """
     Process the CSV file and download websites for each row.
     """
@@ -386,10 +426,10 @@ def process_csv(csv_file, output_base_dir, state_file_path):
             second_date_folder = os.path.join(output_base_dir, f"{sanitized_name}_up_to_{second_date}")
             
             # Download for first date
-            run_wayback_downloader(website_url, first_date, first_date_folder, state, state_file_path)
+            run_wayback_downloader(website_url, first_date, first_date_folder, state, state_file_path, proxy_config)
             
             # Download for second date
-            run_wayback_downloader(website_url, second_date, second_date_folder, state, state_file_path)
+            run_wayback_downloader(website_url, second_date, second_date_folder, state, state_file_path, proxy_config)
             
         logging.info(f"\n Finished processing all {len(df)} websites")
         
@@ -431,6 +471,20 @@ def main():
         help="Path to state file (default: <output_dir>/wayback_scraper_state.json)"
     )
     
+    # Add proxy options
+    parser.add_argument(
+        "--proxy",
+        help="Proxy URL (e.g., http://proxy.example.com:8080)"
+    )
+    parser.add_argument(
+        "--proxy-user",
+        help="Proxy username for authentication"
+    )
+    parser.add_argument(
+        "--proxy-pass",
+        help="Proxy password for authentication"
+    )
+    
     args = parser.parse_args()
     
     # Check if CSV file exists
@@ -445,6 +499,15 @@ def main():
     # Set state file path
     state_file_path = args.state_file or os.path.join(output_dir, STATE_FILE_NAME)
     
+    # Setup proxy configuration
+    proxy_config = None
+    if args.proxy:
+        proxy_config = {
+            'url': args.proxy,
+            'user': args.proxy_user,
+            'password': args.proxy_pass
+        }
+    
     # Setup logging
     logger = setup_logging(output_dir)
     
@@ -455,18 +518,22 @@ def main():
     logger.info(f"State file: {state_file_path}")
     logger.info(f"Time periods: {MONTHS_BEFORE_DEAL} months before, {MONTHS_AFTER_DEAL} months after deal date")
     logger.info(f"Resume mode: ALWAYS ON (automatic)")
+    if proxy_config:
+        logger.info(f"Proxy: {proxy_config['url']}")
+        if proxy_config.get('user'):
+            logger.info(f"Proxy user: {proxy_config['user']}")
+    else:
+        logger.info("Proxy: None (direct connection)")
     logger.info("=" * 50)
     
     # Process the CSV file
-    success = process_csv(args.csv_file, output_dir, state_file_path)
+    success = process_csv(args.csv_file, output_dir, state_file_path, proxy_config)
     
     if success:
-        logger.info(f"\nAll downloads completed. Check the '{output_dir}' directory for results.")
-        logger.info(f"State file saved at: {state_file_path}")
-        logger.info(f"Main log file saved at: {os.path.join(output_dir, 'logs', MAIN_LOG_FILE)}")
-        sys.exit(0)
+        logger.info("✅ Scraping completed successfully!")
+        logger.info(f"📁 Check the downloads in: {output_dir}")
     else:
-        logger.error(f"\nScript completed with errors.")
+        logger.error("❌ Scraping failed!")
         sys.exit(1)
 
 
